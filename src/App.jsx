@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import OnboardingGuard from "./routes/OnboardingGuard";
 import CampaignDetail from "./components/CampaignDetail";
+import ContentPage from "./components/ContentPage"; // <--- CHANGE 1: Import added
 
 function App() {
   return (
@@ -36,6 +37,16 @@ function App() {
           element={
             <OnboardingGuard>
               <HomePage />
+            </OnboardingGuard>
+          }
+        />
+
+        {/* <--- CHANGE 2: Added Dashboard Route */}
+        <Route
+          path="/dashboard"
+          element={
+            <OnboardingGuard>
+              <ContentPage />
             </OnboardingGuard>
           }
         />

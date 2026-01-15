@@ -1,11 +1,13 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, Rocket } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, Rocket, User } from "lucide-react";
 
 function Signup() {
   const navigate = useNavigate();
+  const [name, setName] = useState(""); // Added Name State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState(""); // Added Confirm Password State
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,8 +16,14 @@ function Signup() {
     e.preventDefault();
     setError("");
 
-    if (!email || !password) {
+    // Validation
+    if (!name || !email || !password || !confirmPassword) {
       setError("Please fill in all fields");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
       return;
     }
 
@@ -25,7 +33,7 @@ function Signup() {
       const res = await fetch("http://localhost:3000/api/v1/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password }), // Sending Name to backend
       });
 
       const data = await res.json();
@@ -87,6 +95,21 @@ function Signup() {
           <form className="mt-8 space-y-6" onSubmit={handleSignup}>
             
             <div className="space-y-4">
+              
+              {/* Name Field (ADDED) */}
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-slate-400 group-focus-within:text-purple-500 transition-colors" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Full Name"
+                  className="block w-full pl-10 pr-3 py-3 border border-slate-300 dark:border-slate-700 rounded-lg leading-5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all sm:text-sm"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+
               {/* Email Field */}
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -125,6 +148,25 @@ function Signup() {
                   )}
                 </button>
               </div>
+
+              {/* Confirm Password Field (ADDED) */}
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className={`h-5 w-5 transition-colors ${confirmPassword && password !== confirmPassword ? "text-red-400" : "text-slate-400 group-focus-within:text-purple-500"}`} />
+                </div>
+                <input
+                  type="password"
+                  placeholder="Confirm password"
+                  className={`block w-full pl-10 pr-3 py-3 border rounded-lg leading-5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all sm:text-sm
+                    ${confirmPassword && password !== confirmPassword 
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500" 
+                      : "border-slate-300 dark:border-slate-700 focus:ring-purple-500 focus:border-purple-500"
+                    }`}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
             </div>
 
             {/* Error Message */}

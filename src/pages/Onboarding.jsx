@@ -17,7 +17,6 @@ import {
   Briefcase,
   Users,
   Target,
-  AtSign, // Added for the ID inputs
 } from "lucide-react";
 
 /* ---------------- Platform Config ---------------- */
@@ -172,11 +171,8 @@ const Onboarding = () => {
 
       <div className="w-full max-w-2xl z-10">
         
-        {/* Header Section */}
+        {/* Header Section - Star Removed */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
-            <Sparkles className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-3 tracking-tight">
             Setup your Profile
           </h1>
@@ -188,12 +184,19 @@ const Onboarding = () => {
         {/* Glass Card */}
         <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)] border border-white/50 dark:border-slate-700/50 p-6 md:p-10 transition-all duration-500">
           
-          {/* Progress Bar */}
-          <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full mb-8 overflow-hidden">
-            <div 
-              className="bg-indigo-600 h-full rounded-full transition-all duration-500 ease-out"
-              style={{ width: step === 1 ? '50%' : '100%' }}
-            />
+          {/* Progress Bar with Percentage */}
+          <div className="mb-8">
+            <div className="flex justify-end mb-2">
+              <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                {step === 1 ? "50%" : "100%"}
+              </span>
+            </div>
+            <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div 
+                className="bg-indigo-600 h-full rounded-full transition-all duration-500 ease-out"
+                style={{ width: step === 1 ? '50%' : '100%' }}
+              />
+            </div>
           </div>
 
           {errors.server && (
