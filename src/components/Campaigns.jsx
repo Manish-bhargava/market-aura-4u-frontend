@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
 import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
 import format from "date-fns/format";
@@ -7,14 +7,12 @@ import parse from "date-fns/parse";
 import startOfWeek from "date-fns/startOfWeek";
 import getDay from "date-fns/getDay";
 import enUS from "date-fns/locale/en-US";
-import { DndProvider, useDrag } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 
-// Styles
+/* --- CSS IMPORTS --- */
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
 
-// 1. Setup Calendar Localizer
+/* --- CALENDAR SETUP --- */
 const locales = { "en-US": enUS };
 const localizer = dateFnsLocalizer({
   format,
@@ -23,228 +21,213 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
-
 const DnDCalendar = withDragAndDrop(Calendar);
 
-// 2. Draggable Sidebar Item Component
-const DraggableCampaign = ({ campaign }) => {
-  const [{ isDragging }, drag] = useDrag(() => ({
-    type: "campaign",
-    item: { id: campaign._id, title: campaign.title },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }));
+/* --- COMPONENTS --- */
 
+// NATIVE HTML5 DRAGGABLE COMPONENT
+const DraggableCampaign = ({ item, onDragStart }) => {
   return (
     <div
-      ref={drag}
-      className={`p-4 mb-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-1 ${
-        isDragging ? "opacity-50" : "opacity-100"
-      }`}
+      draggable="true"
+      onDragStart={(e) => onDragStart(e, item)}
+      className="group relative p-4 mb-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all hover:border-blue-300"
     >
-      <h4 className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">
-        {campaign.title || "Untitled Campaign"}
-      </h4>
-      <div className="flex justify-between items-center mt-2">
-        <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
-          Draft
-        </span>
-        <span className="text-xs text-blue-500 font-medium">Drag to Schedule</span>
+      <div className="flex justify-between items-start">
+        <div className="flex-1 min-w-0">
+          <Link
+            to={`/campaign/${item._id}`}
+            className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate block hover:text-blue-600 dark:hover:text-blue-400"
+            title="View Details"
+          >
+            {item.originalContent}
+          </Link>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+              Draft
+            </span>
+            <span className="text-xs text-gray-400">
+              {new Date(item.createdAt).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
+        {/* Drag Handle Icon */}
+        <div className="text-gray-300 group-hover:text-blue-500 cursor-grab">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>
+        </div>
       </div>
     </div>
   );
 };
 
-const CampaignsScheduler = () => {
-  const [campaigns, setCampaigns] = useState([]);
+/* --- MAIN PAGE --- */
+const Campaigns = () => {
+  const [history, setHistory] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const navigate = useNavigate();
 
-  // Fetch Campaigns
-  useEffect(() => {
-    fetch("http://localhost:3000/api/v1/campaign/my", { credentials: "include" })
+  // We use a ref to track what is currently being dragged
+  // This bypasses complex state passing during the drag event
+  const draggedItemRef = useRef(null);
+
+  /* 1. Fetch Data */
+  const fetchHistory = useCallback(() => {
+    fetch("http://localhost:3000/api/v1/content/history", {
+      credentials: "include",
+    })
       .then((res) => res.json())
       .then((data) => {
-        const rawData = data.data || [];
-        setCampaigns(rawData);
-
-        // Convert existing scheduled campaigns to Calendar Events
-        const mappedEvents = rawData
-          .filter((c) => c.scheduledDate) // Assuming your DB has a scheduledDate field
-          .map((c) => ({
-            id: c._id,
-            title: c.title,
-            start: new Date(c.scheduledDate),
-            end: new Date(new Date(c.scheduledDate).getTime() + 60 * 60 * 1000), // Default 1 hour duration
-            resource: c,
-          }));
-        setEvents(mappedEvents);
+        setHistory(data.data || []);
         setLoading(false);
       })
       .catch((err) => {
-        console.error("❌ Failed to load campaigns:", err);
+        console.error("Fetch error:", err);
         setLoading(false);
       });
   }, []);
 
-  // 3. Handle Dropping a Sidebar Item onto the Calendar
-  const onDropFromOutside = useCallback(
-    ({ start, end, allDay: isAllDay }, item) => {
-      const campaignId = item.id;
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
-      // Optimistic UI Update
-      const campaign = campaigns.find((c) => c._id === campaignId);
-      if (!campaign) return;
+  /* 2. Drag Start Handler (Native) */
+  const handleDragStart = useCallback((e, item) => {
+    draggedItemRef.current = item;
+    // We must set some data for the drag to be valid in HTML5
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", JSON.stringify(item));
+  }, []);
 
-      const newEvent = {
-        id: campaign._id,
-        title: campaign.title,
-        start,
-        end,
-        resource: campaign,
-      };
+  /* 3. API: Publish/Schedule */
+  const handlePublish = async ({ start, end }) => {
+    const item = draggedItemRef.current;
+    if (!item) return;
 
-      setEvents((prev) => [...prev, newEvent]);
+    const confirmSchedule = window.confirm(
+      `Schedule "${item.originalContent}" for ${format(start, "PP p")}?`
+    );
 
-      // TODO: API Call to save the schedule
-      // saveScheduleToBackend(campaignId, start);
-      alert(`Scheduled "${campaign.title}" for ${format(start, "PPP p")}`);
-    },
-    [campaigns]
-  );
+    if (!confirmSchedule) {
+        draggedItemRef.current = null; // Clear ref if cancelled
+        return;
+    }
 
-  // 4. Handle Moving an Event already on the Calendar
-  const moveEvent = useCallback(
-    ({ event, start, end, isAllDay: droppedOnAllDaySlot = false }) => {
-      setEvents((prev) => {
-        const existing = prev.find((ev) => ev.id === event.id);
-        const filtered = prev.filter((ev) => ev.id !== event.id);
-        return [...filtered, { ...existing, start, end }];
+    setIsPublishing(true);
+
+    try {
+      const response = await fetch("http://localhost:3000/api/v1/content/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          contentId: item._id,
+          scheduledAt: start.toISOString(),
+          platform: "twitter"
+        }),
       });
 
-      // TODO: API Call to update the schedule
-      console.log(`Updated ${event.title} to ${start}`);
+      const data = await response.json();
+
+      if (data.success || response.ok) {
+        setEvents((prev) => [
+          ...prev,
+          {
+            id: item._id,
+            title: item.originalContent,
+            start,
+            end,
+            allDay: false,
+          },
+        ]);
+        setHistory((prev) => prev.filter((h) => h._id !== item._id));
+      } else {
+        alert("Failed to schedule: " + (data.message || "Unknown error"));
+      }
+    } catch (error) {
+      console.error("Publishing error:", error);
+      alert("Error connecting to server.");
+    } finally {
+      setIsPublishing(false);
+      draggedItemRef.current = null; // Reset
+    }
+  };
+
+  /* 4. Drop Handler */
+  const onDropFromOutside = useCallback(
+    ({ start, end }) => {
+      // Logic is handled in handlePublish, which reads the ref
+      handlePublish({ start, end });
     },
     []
   );
 
-  // 5. Custom Event Component for the Calendar
-  const EventComponent = ({ event }) => (
-    <div className="flex flex-col h-full justify-center px-1 text-xs">
-      <span className="font-bold truncate">{event.title}</span>
-      <span className="opacity-75">{format(event.start, "h:mm a")}</span>
-    </div>
+  const handleSelectEvent = useCallback((event) => navigate(`/campaign/${event.id}`), [navigate]);
+
+  const unscheduled = useMemo(
+    () => history.filter((h) => !events.find((e) => e.id === h._id)),
+    [history, events]
   );
 
-  // Filter unscheduled campaigns for the sidebar
-  const unscheduledCampaigns = useMemo(
-    () =>
-      campaigns.filter((c) => !events.find((e) => e.id === c._id)),
-    [campaigns, events]
-  );
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-10 text-center">Loading Planner...</div>;
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col">
-        
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 shadow-sm z-10">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Content Calendar</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Drag unscheduled drafts onto the calendar to launch.
-              </p>
-            </div>
-            <Link
-              to="/create-campaign"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition"
-            >
-              + New Campaign
-            </Link>
+    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900 p-6">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Content Planner</h1>
+          <p className="text-sm text-gray-500">Drag drafts to schedule.</p>
+        </div>
+        {isPublishing && (
+           <div className="text-blue-600 font-semibold animate-pulse">Scheduling...</div>
+        )}
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-6 h-full">
+        {/* SIDEBAR */}
+        <div className="w-full lg:w-80 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-[700px]">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+            <h3 className="text-xs font-bold uppercase text-gray-500">Unscheduled Drafts</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {unscheduled.map((item) => (
+              <DraggableCampaign 
+                key={item._id} 
+                item={item} 
+                onDragStart={handleDragStart} // PASSING THE NATIVE HANDLER
+              />
+            ))}
           </div>
         </div>
 
-        <div className="flex flex-1 max-w-7xl mx-auto w-full p-6 gap-6 h-[calc(100vh-80px)]">
-          
-          {/* Sidebar: Unscheduled Drafts */}
-          <div className="w-1/4 min-w-[280px] flex flex-col h-full">
-            <h3 className="font-bold text-gray-600 dark:text-gray-300 mb-4 uppercase text-xs tracking-wider">
-              Unscheduled Drafts ({unscheduledCampaigns.length})
-            </h3>
+        {/* CALENDAR */}
+        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-2 h-[700px]">
+          <DnDCalendar
+            localizer={localizer}
+            events={events}
+            onDropFromOutside={onDropFromOutside}
+            onSelectEvent={handleSelectEvent}
+            startAccessor="start"
+            endAccessor="end"
+            defaultView={Views.WEEK}
+            views={[Views.MONTH, Views.WEEK, Views.DAY]}
             
-            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-              {unscheduledCampaigns.length === 0 ? (
-                <div className="text-center py-10 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-400">No pending drafts</p>
-                </div>
-              ) : (
-                unscheduledCampaigns.map((c) => (
-                  <DraggableCampaign key={c._id} campaign={c} />
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Main: Calendar */}
-          <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 h-full overflow-hidden">
-            <DnDCalendar
-              localizer={localizer}
-              events={events}
-              onEventDrop={moveEvent}
-              onDropFromOutside={onDropFromOutside}
-              startAccessor="start"
-              endAccessor="end"
-              defaultView={Views.WEEK}
-              views={[Views.MONTH, Views.WEEK, Views.DAY]}
-              draggableAccessor={() => true}
-              resizable
-              selectable
-              components={{
-                event: EventComponent,
-              }}
-              // Custom Styles to match Tailwind theme
-              eventPropGetter={(event) => ({
-                className: "bg-blue-600 text-white rounded-md border-0 shadow-sm",
-                style: { backgroundColor: "#2563eb" }, // Tailwind blue-600
-              })}
-              dayPropGetter={(date) => ({
-                 className: "bg-white dark:bg-gray-800 dark:text-gray-100 border-gray-100 dark:border-gray-700"
-              })}
-              className="text-gray-700 dark:text-gray-300 font-sans"
-            />
-          </div>
+            // IMPORTANT: These props enable the drop interaction
+            resizable={true}
+            selectable={true} 
+            
+            style={{ height: "100%" }}
+            eventPropGetter={() => ({
+               className: "bg-blue-600 border-0 rounded-md shadow-sm text-xs"
+            })}
+          />
         </div>
       </div>
-      
-      {/* CSS Overrides for Dark Mode & Calendar Modernization */}
-      <style>{`
-        .rbc-calendar { min-height: 600px; }
-        .rbc-toolbar button { color: inherit; border-color: rgba(156, 163, 175, 0.4); }
-        .rbc-toolbar button:hover { background-color: rgba(59, 130, 246, 0.1); }
-        .rbc-toolbar button.rbc-active { background-color: #3b82f6; color: white; border-color: #3b82f6; }
-        .rbc-month-view, .rbc-time-view, .rbc-agenda-view { border-color: rgba(156, 163, 175, 0.2); }
-        .rbc-header { border-bottom-color: rgba(156, 163, 175, 0.2); padding: 8px 0; font-weight: 600; }
-        .rbc-day-bg + .rbc-day-bg { border-left-color: rgba(156, 163, 175, 0.2); }
-        .rbc-timeslot-group { border-bottom-color: rgba(156, 163, 175, 0.1); }
-        .rbc-time-content { border-top-color: rgba(156, 163, 175, 0.2); }
-        .rbc-time-view .rbc-row { border-bottom: none; }
-        
-        /* Dark mode specific overrides if parent has dark class */
-        .dark .rbc-off-range-bg { background-color: #1f2937; }
-        .dark .rbc-today { background-color: rgba(59, 130, 246, 0.1); }
-      `}</style>
-    </DndProvider>
+    </div>
   );
 };
 
-export default CampaignsScheduler;
+export default Campaigns;

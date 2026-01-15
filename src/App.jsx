@@ -1,26 +1,33 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import "./app.css";
 
+/* Pages */
 import LandingPage from "./pages/LandingPage";
 import HomePage from "./pages/HomePage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Onboarding from "./pages/Onboarding";
-import './app.css'
 import Profile from "./pages/Profile";
+
+/* Components (used inside HomePage <Outlet />) */
+import Campaigns from "./components/Campaigns";
+import ContentPage from "./components/ContentPage";
+import CampaignDetail from "./components/CampaignDetail";
+
+/* Route Guards */
 import ProtectedRoute from "./routes/ProtectedRoute";
 import OnboardingGuard from "./routes/OnboardingGuard";
-import CampaignDetail from "./components/CampaignDetail";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
+        {/* ---------------- PUBLIC ---------------- */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
 
-        {/* Onboarding */}
+        {/* ---------------- ONBOARDING ---------------- */}
         <Route
           path="/onboarding"
           element={
@@ -30,7 +37,7 @@ function App() {
           }
         />
 
-        {/* App (only after onboarding) */}
+        {/* ---------------- MAIN APP (SIDEBAR + OUTLET) ---------------- */}
         <Route
           path="/homepage"
           element={
@@ -38,19 +45,51 @@ function App() {
               <HomePage />
             </OnboardingGuard>
           }
-        />
+        >
+          {/* 👇 RENDERED INSIDE <Outlet /> */}
+          <Route
+            index
+            element={
+              <div className="p-6">
+                <h2 className="text-xl font-bold">Dashboard</h2>
+                <p className="text-gray-500">
+                  Welcome to your AI-powered marketing workspace.
+                </p>
+              </div>
+            }
+          />
+          <Route path="campaigns" element={<Campaigns />} />
+          <Route path="content" element={<ContentPage />} />
+          <Route
+            path="analytics"
+            element={
+              <div className="p-6">
+                <h2 className="text-xl font-bold">Analytics</h2>
+                <p className="text-gray-500">Coming soon…</p>
+              </div>
+            }
+          />
+        </Route>
 
+        {/* ---------------- CAMPAIGN DETAIL (FULL PAGE) ---------------- */}
         <Route
-          path="/profile"
+          path="/campaign/:id"
           element={
-          <OnboardingGuard>
-            <Profile />
-          </OnboardingGuard>
+            <OnboardingGuard>
+              <CampaignDetail />
+            </OnboardingGuard>
           }
         />
 
-         <Route path="/campaign/:id" element={<CampaignDetail />} />
-
+        {/* ---------------- PROFILE ---------------- */}
+        <Route
+          path="/profile"
+          element={
+            <OnboardingGuard>
+              <Profile />
+            </OnboardingGuard>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );

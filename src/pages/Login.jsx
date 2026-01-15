@@ -38,9 +38,17 @@ function Login() {
       }
 
       // Optional: store user info (NOT token)
+      // store user info (NOT token)
       localStorage.setItem("user", JSON.stringify(data.data));
 
+// 🔥 redirect based on onboarding status
+      if (data.data.isOnboarded) {
+      console.log(data.data.isOnboarded);
       navigate("/homepage");
+      } else {
+      navigate("/onboarding");
+      }
+
     } catch (err) {
       setError(err.message || "Login failed. Please check your credentials.");
     } finally {
