@@ -20,7 +20,7 @@ const Profile = () => {
     const fetchProfile = async () => {
       try {
         const res = await fetch(
-          "http://localhost:3000/api/v1/auth/profile",
+          "https://toni-unparenthesized-ayaan.ngrok-free.dev/api/v1/auth/profile",
           {
             method: "GET",
             credentials: "include",
