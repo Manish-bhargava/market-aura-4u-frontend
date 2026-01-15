@@ -1,79 +1,52 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Calendar, dateFnsLocalizer, Views } from "react-big-calendar";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import format from "date-fns/format";
-import parse from "date-fns/parse";
-import startOfWeek from "date-fns/startOfWeek";
-import getDay from "date-fns/getDay";
-import enUS from "date-fns/locale/en-US";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
-/* --- CSS IMPORTS --- */
-import "react-big-calendar/lib/css/react-big-calendar.css";
-import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
-
-/* --- CALENDAR SETUP --- */
-const locales = { "en-US": enUS };
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
-const DnDCalendar = withDragAndDrop(Calendar);
-
-/* --- COMPONENTS --- */
-
-// NATIVE HTML5 DRAGGABLE COMPONENT
-const DraggableCampaign = ({ item, onDragStart }) => {
+/* ===========================
+   SINGLE CAMPAIGN CARD
+=========================== */
+const CampaignCard = ({ item, onPublish, isPublishing }) => {
   return (
-    <div
-      draggable="true"
-      onDragStart={(e) => onDragStart(e, item)}
-      className="group relative p-4 mb-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all hover:border-blue-300"
-    >
-      <div className="flex justify-between items-start">
-        <div className="flex-1 min-w-0">
-          <Link
-            to={`/campaign/${item._id}`}
-            className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate block hover:text-blue-600 dark:hover:text-blue-400"
-            title="View Details"
-          >
-            {item.originalContent}
-          </Link>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-              Draft
-            </span>
-            <span className="text-xs text-gray-400">
-              {new Date(item.createdAt).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-        {/* Drag Handle Icon */}
-        <div className="text-gray-300 group-hover:text-blue-500 cursor-grab">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" /></svg>
-        </div>
-      </div>
+    <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+      <Link
+        to={`/campaign/${item._id}`}
+        className="text-sm font-semibold text-gray-900 dark:text-white hover:text-blue-600 block"
+      >
+        {item.originalContent}
+      </Link>
+
+      {item.imageUrl && (
+        <img
+          src={item.imageUrl}
+          alt="Preview"
+          className="mt-3 rounded-lg h-40 w-full object-cover"
+        />
+      )}
+
+      <p className="text-xs text-gray-400 mt-2">
+        Created on {new Date(item.createdAt).toLocaleDateString()}
+      </p>
+
+      <button
+        onClick={() => onPublish(item)}
+        disabled={isPublishing}
+        className="mt-4 w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 rounded-lg font-semibold hover:opacity-90 disabled:opacity-60"
+      >
+        {isPublishing ? "Publishing..." : "Publish to Instagram"}
+      </button>
     </div>
   );
 };
 
-/* --- MAIN PAGE --- */
+/* ===========================
+   MAIN PAGE
+=========================== */
 const Campaigns = () => {
   const [history, setHistory] = useState([]);
-  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const navigate = useNavigate();
+  const [publishingId, setPublishingId] = useState(null);
 
-  // We use a ref to track what is currently being dragged
-  // This bypasses complex state passing during the drag event
-  const draggedItemRef = useRef(null);
-
-  /* 1. Fetch Data */
-  const fetchHistory = useCallback(() => {
+  /* Fetch drafts */
+  useEffect(() => {
     fetch("http://localhost:3000/api/v1/content/history", {
       credentials: "include",
     })
@@ -82,150 +55,62 @@ const Campaigns = () => {
         setHistory(data.data || []);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("Fetch error:", err);
-        setLoading(false);
-      });
+      .catch(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  /* Publish handler */
+  const handlePublish = async (item) => {
+  //  const confirm = window.confirm(
+ //     "Publish this content to Instagram now?"
+  //  );
+  //  if (!confirm) return;
 
-  /* 2. Drag Start Handler (Native) */
-  const handleDragStart = useCallback((e, item) => {
-    draggedItemRef.current = item;
-    // We must set some data for the drag to be valid in HTML5
-    e.dataTransfer.effectAllowed = "copy";
-    e.dataTransfer.setData("text/plain", JSON.stringify(item));
-  }, []);
-
-  /* 3. API: Publish/Schedule */
-  const handlePublish = async ({ start, end }) => {
-    const item = draggedItemRef.current;
-    if (!item) return;
-
-    const confirmSchedule = window.confirm(
-      `Schedule "${item.originalContent}" for ${format(start, "PP p")}?`
-    );
-
-    if (!confirmSchedule) {
-        draggedItemRef.current = null; // Clear ref if cancelled
-        return;
-    }
-
-    setIsPublishing(true);
+  //  setPublishingId(item._id);
 
     try {
-      const response = await fetch("http://localhost:3000/api/v1/content/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          contentId: item._id,
-          scheduledAt: start.toISOString(),
-          platform: "twitter"
-        }),
-      });
+      window.location.href =
+      "http://localhost:3000/api/v1/auth/instagram/login";
+
 
       const data = await response.json();
 
-      if (data.success || response.ok) {
-        setEvents((prev) => [
-          ...prev,
-          {
-            id: item._id,
-            title: item.originalContent,
-            start,
-            end,
-            allDay: false,
-          },
-        ]);
-        setHistory((prev) => prev.filter((h) => h._id !== item._id));
-      } else {
-        alert("Failed to schedule: " + (data.message || "Unknown error"));
-      }
+    //  if (data.success) {
+    //    setHistory((prev) => prev.filter((c) => c._id !== item._id));
+     //   alert("Published successfully 🚀");
+   //   } else {
+   //     alert(data.message || "Publish failed");
+   //   }
     } catch (error) {
-      console.error("Publishing error:", error);
-      alert("Error connecting to server.");
-    } finally {
-      setIsPublishing(false);
-      draggedItemRef.current = null; // Reset
+      alert("Server error");
+ //   } finally {
+  //    setPublishingId(null);
     }
   };
 
-  /* 4. Drop Handler */
-  const onDropFromOutside = useCallback(
-    ({ start, end }) => {
-      // Logic is handled in handlePublish, which reads the ref
-      handlePublish({ start, end });
-    },
-    []
-  );
-
-  const handleSelectEvent = useCallback((event) => navigate(`/campaign/${event.id}`), [navigate]);
-
-  const unscheduled = useMemo(
-    () => history.filter((h) => !events.find((e) => e.id === h._id)),
-    [history, events]
-  );
-
-  if (loading) return <div className="p-10 text-center">Loading Planner...</div>;
+  if (loading) {
+    return <div className="p-10 text-center">Loading drafts...</div>;
+  }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900 p-6">
-      
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Content Planner</h1>
-          <p className="text-sm text-gray-500">Drag drafts to schedule.</p>
-        </div>
-        {isPublishing && (
-           <div className="text-blue-600 font-semibold animate-pulse">Scheduling...</div>
-        )}
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        Instagram Drafts
+      </h1>
 
-      <div className="flex flex-col lg:flex-row gap-6 h-full">
-        {/* SIDEBAR */}
-        <div className="w-full lg:w-80 flex flex-col bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 h-[700px]">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-            <h3 className="text-xs font-bold uppercase text-gray-500">Unscheduled Drafts</h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {unscheduled.map((item) => (
-              <DraggableCampaign 
-                key={item._id} 
-                item={item} 
-                onDragStart={handleDragStart} // PASSING THE NATIVE HANDLER
-              />
-            ))}
-          </div>
+      {history.length === 0 ? (
+        <p className="text-gray-500">No drafts available.</p>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {history.map((item) => (
+            <CampaignCard
+              key={item._id}
+              item={item}
+              onPublish={handlePublish}
+             // isPublishing={publishingId === item._id}
+            />
+          ))}
         </div>
-
-        {/* CALENDAR */}
-        <div className="flex-1 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-2 h-[700px]">
-          <DnDCalendar
-            localizer={localizer}
-            events={events}
-            onDropFromOutside={onDropFromOutside}
-            onSelectEvent={handleSelectEvent}
-            startAccessor="start"
-            endAccessor="end"
-            defaultView={Views.WEEK}
-            views={[Views.MONTH, Views.WEEK, Views.DAY]}
-            
-            // IMPORTANT: These props enable the drop interaction
-            resizable={true}
-            selectable={true} 
-            
-            style={{ height: "100%" }}
-            eventPropGetter={() => ({
-               className: "bg-blue-600 border-0 rounded-md shadow-sm text-xs"
-            })}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 };
